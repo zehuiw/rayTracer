@@ -70,10 +70,60 @@ void PhotonMappingRenderer::TracePhoton(PhotonKdtree& photonMap, Ray* photonRay,
      *        ... set photon properties ...
      *        photonMap.insert(myPhoton);
      */
-
+    if(remainingBounces < 0) return;
+    
     assert(photonRay);
     IntersectionState state(0, 0);
     state.currentIOR = currentIOR;
+    bool hit = storedScene->Trace(photonRay, &state);
+    if(!hit) return;
+    
+    if(path.size() != 1){
+        Photon myPhoton;
+        myPhoton.intensity = lightIntensity;
+        myPhoton.toLightRay.SetRayPosition(glm::vec3(photonRay->GetPosition()));
+        glm::vec3 dir = photonRay->GetRayDirection();
+        myPhoton.toLightRay.SetRayDirection(-1.0f * dir);
+        myPhoton.toLightRay.SetMaxT(photonRay->GetMaxT());
+        const glm::vec3 intersectionPoint = state.intersectionRay.GetRayPosition(state.intersectionT);
+        myPhoton.position = intersectionPoint;
+        photonMap.insert(myPhoton);
+    }
+    
+        const MeshObject* hitMeshObject = state.intersectedPrimitive->GetParentMeshObject();
+        const Material* hitMaterial = hitMeshObject->GetMaterial();
+        glm::vec3 color = hitMaterial->GetBaseDiffuseReflection();
+
+        float pr;
+        if(color.x > color.y) pr = color.x;
+        else pr = color.y;
+        if(color.z > pr) pr = color.z;
+    
+    
+        if((((float) rand()) / (float) RAND_MAX )< pr){ //scatter
+            float u1 = ((float) rand()) / (float) RAND_MAX;
+            float u2 = ((float) rand()) / (float) RAND_MAX;
+            float r = sqrt(u1), theta = 2 * PI * u2;
+            glm::vec3 dray = glm::normalize(glm::vec3(r * cos(theta), r * sin(theta), sqrt(1 - u1)));
+        
+            glm::vec3 n = state.ComputeNormal();
+            glm::vec3 t;
+            if(abs(abs(glm::dot(n, glm::vec3(1, 0, 0))) - 1) < 0.0001) t = glm::cross(n, glm::vec3(0, 1, 0));
+            else t = glm::cross(n, glm::vec3(1, 0, 0));
+            glm::vec3 b = glm::cross(n, t);
+            glm::mat3 trans;
+            trans[0] = t;
+            trans[1] = b;
+            trans[2] = n;
+            
+            dray = glm::transpose(trans) * dray;
+            path.push_back('L');
+            photonRay->SetRayDirection(dray);
+            photonRay->SetPosition(state.intersectionRay.GetRayPosition(state.intersectionT));
+            TracePhoton(photonMap, photonRay, lightIntensity, path, currentIOR, remainingBounces - 1);
+        }
+    
+    
 }
 
 glm::vec3 PhotonMappingRenderer::ComputeSampleColor(const struct IntersectionState& intersection, const class Ray& fromCameraRay) const

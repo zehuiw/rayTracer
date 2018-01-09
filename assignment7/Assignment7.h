@@ -1,5 +1,5 @@
 #pragma once
-
+#include "common/core.h"
 #include "common/Application.h"
 
 class Assignment7 : public Application
